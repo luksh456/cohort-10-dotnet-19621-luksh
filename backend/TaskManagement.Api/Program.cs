@@ -1,3 +1,5 @@
+using Serilog;
+using TaskManagement.Api.Infrastructure;
 using System.Text.Json.Serialization;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,6 +12,10 @@ using TaskManagement.Api.Services;
 using TaskManagement.Api.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext());
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -54,12 +60,16 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+app.UseExceptionHandler();
+app.UseSerilogRequestLogging();
 using (var scope = app.Services.CreateScope())
 {
     await DbSeeder.SeedAdminAsync(scope.ServiceProvider);

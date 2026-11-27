@@ -9,10 +9,12 @@ namespace TaskManagement.Api.Services;
 public class TaskService : ITaskService
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<TaskService> _logger;
 
-    public TaskService(AppDbContext context)
+    public TaskService(AppDbContext context, ILogger<TaskService> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<TaskResponse>> GetTasksAsync(
@@ -86,6 +88,7 @@ public class TaskService : ITaskService
 
         _context.Tasks.Add(task);
         await _context.SaveChangesAsync();
+                _logger.LogInformation("Task {TaskId} created by user {UserId}", task.Id, userId);
 
         var created = await GetByIdAsync(task.Id, userId, isPrivileged);
         return created is null
@@ -99,6 +102,7 @@ public class TaskService : ITaskService
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
         if (task is null || !CanAccess(task, userId, isPrivileged))
         {
+                _logger.LogWarning("User {UserId} tried to update missing or inaccessible task {TaskId}", userId, id);
             return ServiceResult<TaskResponse>.NotFound();
         }
 
@@ -119,6 +123,7 @@ public class TaskService : ITaskService
         task.AssignedToUserId = assignedToUserId;
 
         await _context.SaveChangesAsync();
+                _logger.LogInformation("Task {TaskId} updated by user {UserId}", task.Id, userId);
 
         var updated = await GetByIdAsync(task.Id, userId, isPrivileged);
         return updated is null
@@ -131,11 +136,13 @@ public class TaskService : ITaskService
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
         if (task is null || !CanAccess(task, userId, isPrivileged))
         {
+                     _logger.LogWarning("User {UserId} tried to delete missing or inaccessible task {TaskId}", userId, id);
             return false;
         }
 
         _context.Tasks.Remove(task);
         await _context.SaveChangesAsync();
+                _logger.LogInformation("Task {TaskId} deleted by user {UserId}", id, userId);
         return true;
     }
 
