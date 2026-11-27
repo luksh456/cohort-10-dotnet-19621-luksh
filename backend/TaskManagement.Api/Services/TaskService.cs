@@ -68,6 +68,10 @@ public class TaskService : ITaskService
     public async Task<ServiceResult<TaskResponse>> CreateAsync(
         TaskCreateRequest request, int userId, bool isPrivileged)
     {
+        if (!Enum.IsDefined(request.Priority))
+        {
+            return ServiceResult<TaskResponse>.Invalid("Invalid priority.");
+        }
         var assignedToUserId = isPrivileged ? request.AssignedToUserId ?? userId : userId;
 
         var error = await ValidateReferencesAsync(request.CategoryId, assignedToUserId);
@@ -99,6 +103,15 @@ public class TaskService : ITaskService
     public async Task<ServiceResult<TaskResponse>> UpdateAsync(
         int id, TaskUpdateRequest request, int userId, bool isPrivileged)
     {
+        if (!Enum.IsDefined(request.Status))
+        {
+            return ServiceResult<TaskResponse>.Invalid("Invalid status.");
+        }
+
+        if (!Enum.IsDefined(request.Priority))
+        {
+            return ServiceResult<TaskResponse>.Invalid("Invalid priority.");
+        }
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
         if (task is null || !CanAccess(task, userId, isPrivileged))
         {

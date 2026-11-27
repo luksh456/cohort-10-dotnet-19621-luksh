@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
@@ -17,6 +18,8 @@ public class AuthService : IAuthService
     private readonly AppDbContext _context;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly JwtSettings _jwtSettings;
+    private static readonly Lazy<string> DummyPasswordHash = new(() =>
+        new PasswordHasher<User>().HashPassword(new User(), Guid.NewGuid().ToString("N")));
 
     public AuthService(AppDbContext context, IPasswordHasher<User> passwordHasher, JwtSettings jwtSettings)
     {
@@ -25,13 +28,15 @@ public class AuthService : IAuthService
         _jwtSettings = jwtSettings;
     }
 
-    public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
+        public async Task<bool> RegisterAsync(RegisterRequest request)
     {
         var email = request.Email.Trim().ToLowerInvariant();
 
         if (await _context.Users.AnyAsync(u => u.Email == email))
         {
-            return null;
+           
+            _passwordHasher.HashPassword(new User(), request.Password);
+            return false;
         }
 
         var user = new User
@@ -43,9 +48,17 @@ public class AuthService : IAuthService
         user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
         _context.Users.Add(user);
-        await _context.SaveChangesAsync();
 
-        return CreateAuthResponse(user);
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     public async Task<AuthResponse?> LoginAsync(LoginRequest request)
@@ -55,6 +68,8 @@ public class AuthService : IAuthService
 
         if (user is null)
         {
+           
+            _passwordHasher.VerifyHashedPassword(new User(), DummyPasswordHash.Value, request.Password);
             return null;
         }
 
@@ -65,6 +80,11 @@ public class AuthService : IAuthService
         }
 
         return CreateAuthResponse(user);
+    }
+    
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        return ex.InnerException is SqlException { Number: 2601 or 2627 };
     }
 
     private AuthResponse CreateAuthResponse(User user)

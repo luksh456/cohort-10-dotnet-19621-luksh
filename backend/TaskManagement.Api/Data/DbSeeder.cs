@@ -40,7 +40,22 @@ public static class DbSeeder
         admin.PasswordHash = hasher.HashPassword(admin, password);
 
         context.Users.Add(admin);
-        await context.SaveChangesAsync();
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Another instance may have created the same user at the same time.
+            if (await context.Users.AsNoTracking().AnyAsync(u => u.Email == email))
+            {
+                logger.LogInformation("Admin seed skipped: another instance already created the configured user.");
+                return;
+            }
+
+            throw;
+        }
 
         logger.LogInformation("Default admin user created.");
     }

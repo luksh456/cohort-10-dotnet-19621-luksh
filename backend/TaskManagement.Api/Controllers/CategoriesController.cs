@@ -40,6 +40,6 @@ public class CategoriesController : ControllerBase
         _context.Categories.Add(category);
         await _context.SaveChangesAsync();
 
-        return Ok(new { category.Id, category.Name });
+        return StatusCode(StatusCodes.Status201Created, new { category.Id, category.Name });
     }
 }
